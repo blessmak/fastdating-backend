@@ -1,79 +1,62 @@
 from flask import Flask, request, jsonify
-import random
-from datetime import datetime, timedelta
+import uuid
 
 app = Flask(__name__)
 
-users = {}  # user_id: {profile}
-likes = {}  # user_id: set(liked_user_ids)
-matches = []  # список матчей
+users = {}
+likes = {}
+matches = []
 
-meeting_places = [
-    "Кофейня Salut в Шуваловском",
-    "Лавочки у фонтана МГУ",
-    "Библиотека в ДК",
-    "Смотровая на Воробьевых горах",
-    "Коворкинг на 4 этаже Шуваловки"
-]
-
-def generate_meeting():
-    place = random.choice(meeting_places)
-    day_offset = random.randint(1, 3)
-    time = datetime.now() + timedelta(days=day_offset)
-    return {
-        "place": place,
-        "date": time.strftime("%d.%m.%Y"),
-        "time": time.strftime("%H:%M")
-    }
-
-@app.route("/register", methods=["POST"])
-def register():
+@app.route('/register_user', methods=['POST'])
+def register_user():
     data = request.json
-    user_id = data["user_id"]
+    name = data.get('name')
+    age = data.get('age')
+    interests = data.get('interests', '')
+
+    if not name or not age:
+        return jsonify({'error': 'Имя и возраст обязательны'}), 400
+
+    user_id = str(uuid.uuid4())
     users[user_id] = {
-        "name": data["name"],
-        "faculty": data["faculty"],
-        "gender": data["gender"],
-        "interests": data.get("interests", []),
-        "photo_url": data.get("photo_url", "")
+        'id': user_id,
+        'name': name,
+        'age': age,
+        'interests': interests
     }
     likes[user_id] = set()
-    return jsonify({"status": "registered"})
 
-@app.route("/get_profiles", methods=["GET"])
+    return jsonify({'user_id': user_id})
+
+@app.route('/get_profiles')
 def get_profiles():
-    current_user = request.args.get("user_id")
-    profiles = []
-    for uid, profile in users.items():
-        if uid != current_user and uid not in likes.get(current_user, set()):
-            profiles.append({**profile, "user_id": uid})
+    user_id = request.args.get('user_id')
+    if not user_id or user_id not in users:
+        return jsonify([])
+
+    profiles = [u for uid, u in users.items() if uid != user_id]
     return jsonify(profiles)
 
-@app.route("/like", methods=["POST"])
-def like():
+@app.route('/like_profile', methods=['POST'])
+def like_profile():
     data = request.json
-    user_id = data["user_id"]
-    liked_id = data["liked_user_id"]
+    user_id = data.get('user_id')
+    profile_id = data.get('profile_id')
 
-    likes[user_id].add(liked_id)
+    if not user_id or not profile_id:
+        return jsonify({'error': 'user_id и profile_id обязательны'}), 400
+    if user_id not in users or profile_id not in users:
+        return jsonify({'error': 'Пользователь не найден'}), 404
 
-    if liked_id in likes and user_id in likes[liked_id]:
-        meeting = generate_meeting()
-        match_info = {
-            "user1": users[user_id]["name"],
-            "user2": users[liked_id]["name"],
-            "meeting": meeting
-        }
-        matches.append(match_info)
-        return jsonify({"match": True, "meeting": meeting})
-    return jsonify({"match": False})
+    likes[user_id].add(profile_id)
 
-@app.route("/matches", methods=["GET"])
-def get_matches():
-    return jsonify(matches)
+    if user_id in likes[profile_id]:
+        place = "Кафе на Воробьевых горах"
+        time = "Сегодня в 18:00"
+        matches.append({'user1': user_id, 'user2': profile_id, 'place': place, 'time': time})
+        return jsonify({'match': True, 'place': place, 'time': time})
 
-import os
+    return jsonify({'match': False})
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(debug=True, host="0.0.0.0", port=port)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
