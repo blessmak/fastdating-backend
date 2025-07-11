@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fast Dating МГУ</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #fff;
+      margin: 20px;
+    }
+    .profile {
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .btn {
+      padding: 10px 20px;
+      background-color: #6c63ff;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      margin: 5px;
+      cursor: pointer;
+    }
+    .btn:hover {
+      background-color: #584de0;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Добро пожаловать в Fast Dating МГУ</h2>
+<div id="profileContainer"></div>
+
+<script>
+  const tg = window.Telegram.WebApp;
+  tg.expand();
+
+  let userId = tg.initDataUnsafe.user.id;
+  let name = tg.initDataUnsafe.user.first_name || "Аноним";
+  let photo = tg.initDataUnsafe.user.photo_url || "";
+  
+  // Шаг 1: Регистрация
+  fetch("https://your-backend-url.com/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId,
+      name: name,
+      faculty: "Экономический",
+      gender: "М",
+      photo_url: photo
+    })
+  });
+
+  // Шаг 2: Получаем анкеты других
+  function loadProfiles() {
+    fetch("https://your-backend-url.com/get_profiles?user_id=" + userId)
+      .then(res => res.json())
+      .then(data => {
+        const container = document.getElementById("profileContainer");
+        container.innerHTML = "";
+
+        if (data.length === 0) {
+          container.innerHTML = "<p>Новых анкет пока нет 🙃</p>";
+          return;
+        }
+
+        data.forEach(profile => {
+          const div = document.createElement("div");
+          div.className = "profile";
+          div.innerHTML = `
+            <img src="${profile.photo_url || 'https://placehold.co/100'}" width="100" style="border-radius: 50%;" /><br/>
+            <strong>${profile.name}</strong><br/>
+            ${profile.faculty}<br/><br/>
+            <button class="btn" onclick="like('${profile.user_id}')">❤️ Нравится</button>
+          `;
+          container.appendChild(div);
+        });
+      });
+  }
+
+  loadProfiles();
+
+  // Шаг 3: Лайк
+  function like(likedId) {
+    fetch("https://your-backend-url.com/like", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: userId,
+        liked_user_id: likedId
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.match) {
+        alert(`MATCH! 🥳 Встреча:\n${data.meeting.place}\n${data.meeting.date} в ${data.meeting.time}`);
+      }
+      loadProfiles(); // загрузить следующий
+    });
+  }
+</script>
+
+</body>
+</html>
