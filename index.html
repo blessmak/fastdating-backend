@@ -13,10 +13,10 @@
     h1 {
       color: #6a1b9a;
     }
-    .profile {
+    .profile, .form-container {
       background: white;
       margin-bottom: 15px;
-      padding: 10px;
+      padding: 15px;
       border-radius: 8px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
@@ -33,6 +33,15 @@
       background: grey;
       cursor: default;
     }
+    input, textarea {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
     #message {
       margin-top: 20px;
       padding: 10px;
@@ -46,24 +55,84 @@
 
 <h1>Добро пожаловать в Fast Dating МГУ</h1>
 
-<div id="profiles">Загрузка профилей...</div>
-
 <div id="message"></div>
 
+<!-- Форма регистрации -->
+<div id="registration" class="form-container">
+  <h2>Регистрация</h2>
+  <label for="name">Имя:</label>
+  <input type="text" id="name" required />
+
+  <label for="age">Возраст:</label>
+  <input type="number" id="age" min="16" max="100" required />
+
+  <label for="interests">Интересы (через запятую):</label>
+  <textarea id="interests" rows="3"></textarea>
+
+  <button id="registerBtn">Зарегистрироваться</button>
+</div>
+
+<!-- Контейнер для профилей -->
+<div id="profiles" style="display:none;">Загрузка профилей...</div>
+
 <script>
-  const backendUrl = 'https://fastdating-backend.onrender.com'; // Твой backend на Render
-  const userId = 'testuser'; // Здесь нужно подставлять id текущего пользователя из Telegram
+  const backendUrl = 'https://fastdating-backend.onrender.com'; // Твой backend
+  let userId = null;
+
+  const messageDiv = document.getElementById('message');
+  const registrationDiv = document.getElementById('registration');
+  const profilesDiv = document.getElementById('profiles');
+
+  function showMessage(text, timeout=5000) {
+    messageDiv.textContent = text;
+    messageDiv.style.display = 'block';
+    setTimeout(() => {
+      messageDiv.style.display = 'none';
+    }, timeout);
+  }
+
+  async function registerUser() {
+    const name = document.getElementById('name').value.trim();
+    const age = document.getElementById('age').value.trim();
+    const interests = document.getElementById('interests').value.trim();
+
+    if (!name || !age) {
+      showMessage('Пожалуйста, заполните имя и возраст');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${backendUrl}/register_user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, age, interests })
+      });
+      const data = await res.json();
+
+      if (data.user_id) {
+        userId = data.user_id;
+        showMessage('Регистрация прошла успешно! Загружаем профили...');
+        registrationDiv.style.display = 'none';
+        profilesDiv.style.display = 'block';
+        loadProfiles();
+      } else {
+        showMessage('Ошибка регистрации.');
+      }
+    } catch (e) {
+      showMessage('Ошибка сервера при регистрации.');
+      console.error(e);
+    }
+  }
 
   async function loadProfiles() {
     try {
       const res = await fetch(`${backendUrl}/get_profiles?user_id=${userId}`);
       const profiles = await res.json();
 
-      const container = document.getElementById('profiles');
-      container.innerHTML = '';
+      profilesDiv.innerHTML = '';
 
       if (profiles.length === 0) {
-        container.textContent = 'Профили не найдены.';
+        profilesDiv.textContent = 'Профили не найдены.';
         return;
       }
 
@@ -81,10 +150,10 @@
         const btn = div.querySelector('button');
         btn.onclick = () => likeProfile(profile.id, btn);
 
-        container.appendChild(div);
+        profilesDiv.appendChild(div);
       });
     } catch (e) {
-      document.getElementById('profiles').textContent = 'Ошибка загрузки профилей.';
+      profilesDiv.textContent = 'Ошибка загрузки профилей.';
       console.error(e);
     }
   }
@@ -102,7 +171,7 @@
       const data = await res.json();
 
       if (data.match) {
-        showMessage(`🎉 Это взаимный лайк! Встреча назначена: ${data.place} в ${data.time}`);
+        showMessage(`🎉 Взаимный лайк! Встреча: ${data.place} в ${data.time}`);
       } else {
         showMessage('Лайк отправлен.');
       }
@@ -115,16 +184,8 @@
     btn.disabled = false;
   }
 
-  function showMessage(text) {
-    const msg = document.getElementById('message');
-    msg.textContent = text;
-    msg.style.display = 'block';
-    setTimeout(() => {
-      msg.style.display = 'none';
-    }, 5000);
-  }
+  document.getElementById('registerBtn').onclick = registerUser;
 
-  window.onload = loadProfiles;
 </script>
 
 </body>
