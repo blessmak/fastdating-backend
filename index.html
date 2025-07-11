@@ -2,109 +2,129 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Fast Dating МГУ</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     body {
-      font-family: sans-serif;
-      background-color: #fff;
-      margin: 20px;
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f9f9f9;
+    }
+    h1 {
+      color: #6a1b9a;
     }
     .profile {
-      border: 1px solid #ddd;
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 20px;
-      text-align: center;
+      background: white;
+      margin-bottom: 15px;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
-    .btn {
-      padding: 10px 20px;
-      background-color: #6c63ff;
+    button {
+      background: #6a1b9a;
       color: white;
       border: none;
-      border-radius: 10px;
-      margin: 5px;
+      padding: 8px 12px;
+      border-radius: 5px;
       cursor: pointer;
+      margin-top: 8px;
     }
-    .btn:hover {
-      background-color: #584de0;
+    button:disabled {
+      background: grey;
+      cursor: default;
+    }
+    #message {
+      margin-top: 20px;
+      padding: 10px;
+      background: #d1c4e9;
+      border-radius: 5px;
+      display: none;
     }
   </style>
 </head>
 <body>
 
-<h2>Добро пожаловать в Fast Dating МГУ</h2>
-<div id="profileContainer"></div>
+<h1>Добро пожаловать в Fast Dating МГУ</h1>
+
+<div id="profiles">Загрузка профилей...</div>
+
+<div id="message"></div>
 
 <script>
-  const tg = window.Telegram.WebApp;
-  tg.expand();
+  const backendUrl = 'https://fastdating-backend.onrender.com'; // Твой backend на Render
+  const userId = 'testuser'; // Здесь нужно подставлять id текущего пользователя из Telegram
 
-  let userId = tg.initDataUnsafe.user.id;
-  let name = tg.initDataUnsafe.user.first_name || "Аноним";
-  let photo = tg.initDataUnsafe.user.photo_url || "";
-  
-  // Шаг 1: Регистрация
-  fetch("https://your-backend-url.com/register", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      user_id: userId,
-      name: name,
-      faculty: "Экономический",
-      gender: "М",
-      photo_url: photo
-    })
-  });
+  async function loadProfiles() {
+    try {
+      const res = await fetch(`${backendUrl}/get_profiles?user_id=${userId}`);
+      const profiles = await res.json();
 
-  // Шаг 2: Получаем анкеты других
-  function loadProfiles() {
-    fetch("https://your-backend-url.com/get_profiles?user_id=" + userId)
-      .then(res => res.json())
-      .then(data => {
-        const container = document.getElementById("profileContainer");
-        container.innerHTML = "";
+      const container = document.getElementById('profiles');
+      container.innerHTML = '';
 
-        if (data.length === 0) {
-          container.innerHTML = "<p>Новых анкет пока нет 🙃</p>";
-          return;
-        }
-
-        data.forEach(profile => {
-          const div = document.createElement("div");
-          div.className = "profile";
-          div.innerHTML = `
-            <img src="${profile.photo_url || 'https://placehold.co/100'}" width="100" style="border-radius: 50%;" /><br/>
-            <strong>${profile.name}</strong><br/>
-            ${profile.faculty}<br/><br/>
-            <button class="btn" onclick="like('${profile.user_id}')">❤️ Нравится</button>
-          `;
-          container.appendChild(div);
-        });
-      });
-  }
-
-  loadProfiles();
-
-  // Шаг 3: Лайк
-  function like(likedId) {
-    fetch("https://your-backend-url.com/like", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: userId,
-        liked_user_id: likedId
-      })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.match) {
-        alert(`MATCH! 🥳 Встреча:\n${data.meeting.place}\n${data.meeting.date} в ${data.meeting.time}`);
+      if (profiles.length === 0) {
+        container.textContent = 'Профили не найдены.';
+        return;
       }
-      loadProfiles(); // загрузить следующий
-    });
+
+      profiles.forEach(profile => {
+        const div = document.createElement('div');
+        div.className = 'profile';
+
+        div.innerHTML = `
+          <strong>${profile.name || 'Пользователь'}</strong><br />
+          Возраст: ${profile.age || '-'}<br />
+          Интересы: ${profile.interests || '-'}<br />
+          <button>❤️ Поставить лайк</button>
+        `;
+
+        const btn = div.querySelector('button');
+        btn.onclick = () => likeProfile(profile.id, btn);
+
+        container.appendChild(div);
+      });
+    } catch (e) {
+      document.getElementById('profiles').textContent = 'Ошибка загрузки профилей.';
+      console.error(e);
+    }
   }
+
+  async function likeProfile(profileId, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Отправляю...';
+
+    try {
+      const res = await fetch(`${backendUrl}/like_profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, profile_id: profileId })
+      });
+      const data = await res.json();
+
+      if (data.match) {
+        showMessage(`🎉 Это взаимный лайк! Встреча назначена: ${data.place} в ${data.time}`);
+      } else {
+        showMessage('Лайк отправлен.');
+      }
+    } catch (e) {
+      showMessage('Ошибка отправки лайка.');
+      console.error(e);
+    }
+
+    btn.textContent = '❤️ Поставить лайк';
+    btn.disabled = false;
+  }
+
+  function showMessage(text) {
+    const msg = document.getElementById('message');
+    msg.textContent = text;
+    msg.style.display = 'block';
+    setTimeout(() => {
+      msg.style.display = 'none';
+    }, 5000);
+  }
+
+  window.onload = loadProfiles;
 </script>
 
 </body>
